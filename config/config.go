@@ -9,8 +9,8 @@ var configFileName string
 
 //整个config文件对应的结构
 type Config struct {
-	Addr    string       	`yaml:"addr"`
-	Dev 	string		 	`yaml:"dev"`
+	Addr string `yaml:"addr"`
+	Dev  string `yaml:"dev"`
 }
 
 func ParseConfigData(data []byte) (*Config, error) {
@@ -31,5 +31,3 @@ func ParseConfigFile(fileName string) (*Config, error) {
 
 	return ParseConfigData(data)
 }
-
-
