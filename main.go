@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/pcap"
+	"github.com/jixindatech/sqlpacket/config"
 	"log"
 	"net"
 	"os"
 	"os/signal"
-	"pacptest/config"
 	"strings"
 	"syscall"
 	"time"
@@ -18,15 +18,15 @@ import (
 var configFile *string = flag.String("config", "etc/config.yaml", "audit plugin config file")
 
 var (
-    snapshotLen  int32         = 65535
-    promiscuous  bool          = true
-    port         uint16        = 3306
-    connTimeout  time.Duration = 2
-    retryTime    time.Duration = 5 * time.Second
+	snapshotLen int32         = 65535
+	promiscuous bool          = true
+	port        uint16        = 3306
+	connTimeout time.Duration = 2
+	retryTime   time.Duration = 5 * time.Second
 )
 
 func connectServer(cfg *config.Config) (conn net.Conn, err error) {
-	conn, err = net.DialTimeout("tcp", cfg.Addr,  connTimeout * time.Second)
+	conn, err = net.DialTimeout("tcp", cfg.Addr, connTimeout*time.Second)
 	if err != nil {
 		return nil, fmt.Errorf("dial tcp failed: %s", err)
 	}
@@ -34,10 +34,9 @@ func connectServer(cfg *config.Config) (conn net.Conn, err error) {
 }
 
 func sendPacket(cfg *config.Config, dev string) {
-	fmt.Println("dev: ", dev)
 	handle, err := pcap.OpenLive(dev, snapshotLen, promiscuous, pcap.BlockForever)
 	if err != nil {
-		log.Fatal("open device", dev," failed: ", err)
+		log.Fatal("open device", dev, " failed: ", err)
 	}
 	defer handle.Close()
 
@@ -59,13 +58,13 @@ func sendPacket(cfg *config.Config, dev string) {
 		packetData := packet.Data()
 		length := len(packetData) + 15 // 15 byte for timestamp binary marshal
 
-		data := make([]byte, 4, length + 4)
+		data := make([]byte, 4, length+4)
 		data[0] = byte(length)
 		data[1] = byte(length >> 8)
 		data[2] = byte(length >> 16)
 		data[3] = byte(length >> 24)
 
-		timeInfo,_ := packet.Metadata().Timestamp.MarshalBinary()
+		timeInfo, _ := packet.Metadata().Timestamp.MarshalBinary()
 		data = append(data, timeInfo...)
 
 		data = append(data, packetData...)
@@ -76,7 +75,7 @@ func sendPacket(cfg *config.Config, dev string) {
 				_ = conn.Close()
 				// TODO: retry connect here
 				conn, err = connectServer(cfg)
-				if err != nil  {
+				if err != nil {
 					time.Sleep(retryTime)
 				}
 			}
@@ -126,7 +125,6 @@ func main() {
 }
 
 func getFilter(port uint16) string {
-	filter := fmt.Sprintf("tcp and ((src port %v) or (dst port %v))",  port, port)
+	filter := fmt.Sprintf("tcp and ((src port %v) or (dst port %v))", port, port)
 	return filter
 }
-

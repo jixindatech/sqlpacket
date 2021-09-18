@@ -1,4 +1,4 @@
-module pacptest
+module github.com/jixindatech/sqlpacket
 
 go 1.16
 
