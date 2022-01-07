@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bytes"
+	"encoding/binary"
 	"flag"
 	"fmt"
 	"github.com/google/gopacket"
@@ -34,6 +36,22 @@ func connectServer(cfg *config.Config) (conn net.Conn, err error) {
 }
 
 func sendPacket(cfg *config.Config, dev string) {
+	conn, err := connectServer(cfg)
+	if err != nil {
+		log.Fatal("dial server failed: ", err)
+	}
+	defer conn.Close()
+
+	// write sql type
+	buff := bytes.NewBuffer([]byte{})
+	_ = binary.Write(buff, binary.BigEndian, []byte{0x00, 0x00, 0x00, 0x04}) // length
+	_ = binary.Write(buff, binary.BigEndian, int16(config.SQL_CLASS))        // type class
+	_ = binary.Write(buff, binary.BigEndian, int16(config.SQL_TYPE_MYSQL))   // type
+	_, err = conn.Write(buff.Bytes())
+	if err != nil {
+		log.Fatal("write data failed", err)
+	}
+
 	handle, err := pcap.OpenLive(dev, snapshotLen, promiscuous, pcap.BlockForever)
 	if err != nil {
 		log.Fatal("open device", dev, " failed: ", err)
@@ -47,12 +65,6 @@ func sendPacket(cfg *config.Config, dev string) {
 
 	packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
 	packetSource.NoCopy = true
-
-	conn, err := connectServer(cfg)
-	if err != nil {
-		log.Fatal("dial server failed: ", err)
-	}
-	defer conn.Close()
 
 	for packet := range packetSource.Packets() {
 		packetData := packet.Data()

@@ -11,6 +11,7 @@ var configFileName string
 type Config struct {
 	Addr string `yaml:"addr"`
 	Dev  string `yaml:"dev"`
+	Type string `yaml:"type"`
 }
 
 func ParseConfigData(data []byte) (*Config, error) {

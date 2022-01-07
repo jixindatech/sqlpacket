@@ -1,2 +1,3 @@
-addr : 127.0.0.1:9696
+addr : 192.168.91.1:9696
 dev : ens33,lo
+type: mysql
