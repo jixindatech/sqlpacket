@@ -27,12 +27,24 @@ var (
 	retryTime   time.Duration = 5 * time.Second
 )
 
+func writeHeader(conn net.Conn) error {
+	buff := bytes.NewBuffer([]byte{})
+	_ = binary.Write(buff, binary.BigEndian, []byte{0x00, 0x00, 0x00, 0x04}) // length
+	_ = binary.Write(buff, binary.BigEndian, int16(config.SQL_CLASS))        // type class
+	_ = binary.Write(buff, binary.BigEndian, int16(config.SQL_TYPE_MYSQL))   // type
+	_, err := conn.Write(buff.Bytes())
+	return err
+}
+
 func connectServer(cfg *config.Config) (conn net.Conn, err error) {
 	conn, err = net.DialTimeout("tcp", cfg.Addr, connTimeout*time.Second)
 	if err != nil {
 		return nil, fmt.Errorf("dial tcp failed: %s", err)
 	}
-	return conn, nil
+
+	err = writeHeader(conn)
+
+	return conn, err
 }
 
 func sendPacket(cfg *config.Config, dev string) {
@@ -42,13 +54,7 @@ func sendPacket(cfg *config.Config, dev string) {
 	}
 	defer conn.Close()
 
-	// write sql type
-	buff := bytes.NewBuffer([]byte{})
-	_ = binary.Write(buff, binary.BigEndian, []byte{0x00, 0x00, 0x00, 0x04}) // length
-	_ = binary.Write(buff, binary.BigEndian, int16(config.SQL_CLASS))        // type class
-	_ = binary.Write(buff, binary.BigEndian, int16(config.SQL_TYPE_MYSQL))   // type
-	_, err = conn.Write(buff.Bytes())
-	if err != nil {
+	if writeHeader(conn) != nil {
 		log.Fatal("write data failed", err)
 	}
 
