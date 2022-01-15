@@ -54,10 +54,6 @@ func sendPacket(cfg *config.Config, dev string) {
 	}
 	defer conn.Close()
 
-	if writeHeader(conn) != nil {
-		log.Fatal("write data failed", err)
-	}
-
 	handle, err := pcap.OpenLive(dev, snapshotLen, promiscuous, pcap.BlockForever)
 	if err != nil {
 		log.Fatal("open device", dev, " failed: ", err)
