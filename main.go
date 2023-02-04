@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"flag"
 	"fmt"
 	"github.com/google/gopacket"
@@ -17,14 +18,13 @@ import (
 	"time"
 )
 
-var configFile *string = flag.String("config", "etc/config.yaml", "audit plugin config file")
+var configFile = flag.String("config", "etc/config.yaml", "audit plugin config file")
 
 var (
 	snapshotLen int32         = 65535
-	promiscuous bool          = true
-	port        uint16        = 3306
 	connTimeout time.Duration = 2
-	retryTime   time.Duration = 5 * time.Second
+	retryTime                 = 5 * time.Second
+	retryCount  int32         = 5
 )
 
 func writeHeader(conn net.Conn) error {
@@ -37,7 +37,7 @@ func writeHeader(conn net.Conn) error {
 }
 
 func connectServer(cfg *config.Config) (conn net.Conn, err error) {
-	conn, err = net.DialTimeout("tcp", cfg.Addr, connTimeout*time.Second)
+	conn, err = net.DialTimeout("tcp", cfg.Server, connTimeout*time.Second)
 	if err != nil {
 		return nil, fmt.Errorf("dial tcp failed: %s", err)
 	}
@@ -47,20 +47,47 @@ func connectServer(cfg *config.Config) (conn net.Conn, err error) {
 	return conn, err
 }
 
+func reConnectServer(cfg *config.Config) (net.Conn, error) {
+	count := retryCount
+	conn, err := connectServer(cfg)
+	for {
+		count--
+		if err != nil {
+			time.Sleep(retryTime)
+		}
+
+		if conn != nil {
+			break
+		}
+
+		if count <= 0 {
+			return nil, errors.New("reconnect server failed too many times")
+		}
+
+		conn, err = connectServer(cfg)
+	}
+
+	return conn, nil
+}
 func sendPacket(cfg *config.Config, dev string) {
 	conn, err := connectServer(cfg)
 	if err != nil {
 		log.Fatal("dial server failed: ", err)
 	}
-	defer conn.Close()
+	defer func(conn net.Conn) {
+		err := conn.Close()
+		if err != nil {
+			log.Fatal("conn close failed:", err)
+		}
+	}(conn)
 
-	handle, err := pcap.OpenLive(dev, snapshotLen, promiscuous, pcap.BlockForever)
+	handle, err := pcap.OpenLive(dev, snapshotLen, true, pcap.BlockForever)
 	if err != nil {
 		log.Fatal("open device", dev, " failed: ", err)
 	}
 	defer handle.Close()
 
-	filter := getFilter(port)
+	filter := getFilter(cfg.Port)
 	if err := handle.SetBPFFilter(filter); err != nil {
 		log.Fatal("set bpf filter failed: ", err)
 	}
@@ -84,19 +111,24 @@ func sendPacket(cfg *config.Config, dev string) {
 		data = append(data, packetData...)
 
 		if conn != nil {
-			_, err := conn.Write(data)
+			sendBytes, err := conn.Write(data)
 			if err != nil {
 				_ = conn.Close()
 				// TODO: retry connect here
-				conn, err = connectServer(cfg)
+				conn, err = reConnectServer(cfg)
 				if err != nil {
-					time.Sleep(retryTime)
+					log.Fatal(err)
 				}
 			}
-		} else {
-			conn, err = connectServer(cfg)
+			_, err = conn.Write(data[sendBytes:])
 			if err != nil {
-				time.Sleep(retryTime)
+				log.Fatal(err)
+			}
+		} else {
+			// TODO: retry connect here
+			conn, err = reConnectServer(cfg)
+			if err != nil {
+				log.Fatal(err)
 			}
 		}
 	}
@@ -114,7 +146,7 @@ func main() {
 		log.Fatal("parse config file failed:", err)
 	}
 
-	devs := strings.Split(cfg.Dev, ",")
+	devs := strings.Split(cfg.Inf, ",")
 
 	for _, dev := range devs {
 		go sendPacket(cfg, dev)
