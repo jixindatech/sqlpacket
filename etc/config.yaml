@@ -1,3 +1,4 @@
-addr : 192.168.91.100:9696
-dev : ens33
+server : 192.168.91.100:9696
+Inf : ens33,lo
 type: mysql
+port: 3306
